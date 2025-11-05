@@ -1,520 +1,249 @@
-name: 🚀 SEVER AI STV PREMIUM + ULTRAVIEWER
-
-on:
-  workflow_dispatch:
-    inputs:
-      duration:
-        description: '🕐 Thời gian sử dụng'
-        required: false
-        default: '5h40m'
-        type: choice
-        options:
-        - '1h'
-        - '3h' 
-        - '5h40m'
-
-jobs:
-  Premium-RDP-Setup:
-    runs-on: windows-latest
-    timeout-minutes: 340
-    
-    steps:
-      # BANNER CHÀO MỪNG
-      - name: 🎯 KHỞI ĐỘNG HỆ THỐNG
-        run: |
-          Write-Host ""
-          Write-Host ""
-          Write-Host "🤖 AI STV PREMIUM RDP + ULTRAVIEWER SERVER" -ForegroundColor Yellow
-          Write-Host "⚡ Powered by AI STV" -ForegroundColor Green
-          Write-Host "🕒 Thời gian: ${{ github.event.inputs.duration }}" -ForegroundColor Magenta
-          Write-Host ""
-          
-          # Hiệu ứng loading
-          $frames = @('⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷')
-          for($i=0; $i -lt 10; $i++) {
-              Write-Host "`r🚀 Đang khởi tạo hệ thống... $($frames[$i % 8])" -NoNewline -ForegroundColor Blue
-              Start-Sleep -Milliseconds 100
-          }
-          Write-Host "`r✅ Hệ thống đã sẵn sàng!                    " -ForegroundColor Green
-
-      # CẤU HÌNH NÂNG CAO
-      - name: 🔧 CẤU HÌNH HỆ THỐNG
-        run: |
-          Write-Host ""
-          Write-Host "🛠️  ĐANG CẤU HÌNH HỆ THỐNG" -ForegroundColor Yellow
-          
-          $steps = @(
-              @{Name="Bật Remote Desktop"; Script={ 
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
-              }},
-              @{Name="Tắt xác thực mạng"; Script={
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-              }},
-              @{Name="Cấu hình bảo mật RDP"; Script={
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "SecurityLayer" -Value 0 -Force
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 0 -Force
-              }},
-              @{Name="Mở port 3389 firewall"; Script={
-                  netsh advfirewall firewall add rule name="RDP-Premium" dir=in action=allow protocol=TCP localport=3389 profile=any
-                  netsh advfirewall firewall add rule name="RDP-Premium-Out" dir=out action=allow protocol=TCP localport=3389 profile=any
-              }},
-              @{Name="Khởi động dịch vụ"; Script={
-                  Set-Service -Name TermService -StartupType Automatic -ErrorAction SilentlyContinue
-                  Set-Service -Name UmRdpService -StartupType Automatic -ErrorAction SilentlyContinue
-                  Start-Service -Name TermService -ErrorAction SilentlyContinue
-                  Start-Service -Name UmRdpService -ErrorAction SilentlyContinue
-              }}
-          )
-          
-          foreach($step in $steps) {
-              Write-Host "│ 📋 $($step.Name)..." -NoNewline -ForegroundColor White
-              try {
-                  & $step.Script
-                  Write-Host "`r│ ✅ $($step.Name)" -ForegroundColor Green
-              } catch {
-                  Write-Host "`r│ ⚠️  $($step.Name) - Đã bỏ qua lỗi nhỏ" -ForegroundColor Yellow
-              }
-              Start-Sleep -Milliseconds 500
-          }
-          
-          Write-Host "🎯 Cấu hình hoàn tất!" -ForegroundColor Green
-
-      # TẠO USER PREMIUM
-      - name: 👤 TẠO TÀI KHOẢN PREMIUM
-        run: |
-          Write-Host ""
-          Write-Host "👤 ĐANG TẠO TÀI KHOẢN PREMIUM" -ForegroundColor Yellow
-          
-          function New-PremiumPassword {
-              param()
-              $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
-              $lower = 'abcdefghijkmnpqrstuvwxyz'
-              $numbers = '23456789'
-              $all = $upper + $lower + $numbers
-
-              $pw = ''
-              $pw += $upper[(Get-Random -Minimum 0 -Maximum $upper.Length)]
-              $pw += $lower[(Get-Random -Minimum 0 -Maximum $lower.Length)]
-              $pw += $numbers[(Get-Random -Minimum 0 -Maximum $numbers.Length)]
-
-              for ($i = 1; $i -le 5; $i++) {
-                  $pw += $all[(Get-Random -Minimum 0 -Maximum $all.Length)]
-              }
-
-              return -join ($pw.ToCharArray() | Sort-Object { Get-Random })
-          }
-
-          if ($env:CUSTOM_RDP_PASS) {
-              $matKhau = $env:CUSTOM_RDP_PASS
-              Write-Host "│ ℹ️  Dùng mật khẩu tùy chỉnh từ env" -ForegroundColor Blue
-          } else {
-              $matKhau = New-PremiumPassword
-          }
-
-          $securePass = ConvertTo-SecureString $matKhau -AsPlainText -Force
-          
-          try {
-              Remove-LocalUser -Name "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              Write-Host "│ ✅ Đã xóa user cũ" -ForegroundColor Green
-          } catch {
-              Write-Host "│ ℹ️  Không có user cũ để xóa" -ForegroundColor Blue
-          }
-          
-          try {
-              New-LocalUser -Name "AISTV-PREMIUM" -Password $securePass -AccountNeverExpires -Description "AI STV Premium Account"
-              Write-Host "│ ✅ Đã tạo user mới" -ForegroundColor Green
-              
-              try {
-                  Set-LocalUser -Name "AISTV-PREMIUM" -PasswordNeverExpires $true -ErrorAction SilentlyContinue
-              } catch {}
-
-              Add-LocalGroupMember -Group "Administrators" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              Add-LocalGroupMember -Group "Remote Desktop Users" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              Add-LocalGroupMember -Group "Users" -Member "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              
-              Enable-LocalUser -Name "AISTV-PREMIUM"
-              
-              Write-Host "│ ✅ Đã cấp quyền Administrator & RDP" -ForegroundColor Green
-              
-          } catch {
-              Write-Host "│ ❌ Lỗi tạo user: $($_.Exception.Message)" -ForegroundColor Red
-              exit 1
-          }
-          
-          echo "RDP_USER=AISTV-PREMIUM" >> $env:GITHUB_ENV
-          echo "RDP_PASS=$matKhau" >> $env:GITHUB_ENV
-          echo "$matKhau" > $env:TEMP\rdp_password.txt
-          
-          Write-Host "✅ Tài khoản: AISTV-PREMIUM đã sẵn sàng" -ForegroundColor Green
-
-      # CÀI ĐẶT ULTRAVIEWER
+# CÀI ĐẶT ULTRAVIEWER - KHÔNG CẦN GITHUB
       - name: 📺 CÀI ĐẶT ULTRAVIEWER
         run: |
           Write-Host ""
           Write-Host "📺 ĐANG CÀI ĐẶT ULTRAVIEWER" -ForegroundColor Yellow
           
           try {
-              # Download UltraViewer
+              # Cấu hình mạng và TLS
+              [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+              [Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+              
+              # Fix DNS bằng cách thêm Google DNS
+              Write-Host "│ 🔧 Cấu hình DNS..." -ForegroundColor Blue
+              try {
+                  # Lấy interface đang active
+                  $adapter = Get-NetAdapter | Where-Object {$_.Status -eq "Up"} | Select-Object -First 1
+                  if ($adapter) {
+                      # Thêm Google DNS làm backup
+                      Set-DnsClientServerAddress -InterfaceIndex $adapter.ifIndex -ServerAddresses ("8.8.8.8","8.8.4.4") -ErrorAction SilentlyContinue
+                      Write-Host "│ ✅ Đã cấu hình DNS" -ForegroundColor Green
+                      Start-Sleep -Seconds 3
+                  }
+              } catch {
+                  Write-Host "│ ⚠️  Bỏ qua cấu hình DNS" -ForegroundColor Yellow
+              }
+              
+              # Danh sách nguồn tải - KHÔNG CẦN GITHUB
+              $downloadSources = @(
+                  @{
+                      Url="https://www.ultraviewer.net/en/UltraViewer_setup_6.6_en.exe"
+                      Name="UltraViewer Official"
+                      Method="WebClient"
+                  },
+                  @{
+                      Url="https://cdn.ultraviewer.net/UltraViewer_setup_6.6_en.exe"
+                      Name="UltraViewer CDN"
+                      Method="WebClient"
+                  },
+                  @{
+                      Url="https://ultraviewer.net/UltraViewer_setup_6.6_en.exe"
+                      Name="Mirror 1"
+                      Method="WebRequest"
+                  },
+                  @{
+                      Url="https://download.ultraviewer.net/UltraViewer_setup_6.6_en.exe"
+                      Name="Download Server"
+                      Method="WebClient"
+                  }
+              )
+              
               $uvPath = "$env:TEMP\UltraViewer_setup.exe"
-              Write-Host "│ 📥 Đang tải UltraViewer..." -ForegroundColor Blue
-              Invoke-WebRequest -Uri "https://dl.ultraviewer.net/UltraViewer_setup_6.6_vi.exe" -OutFile $uvPath -ErrorAction Stop
+              $downloaded = $false
               
-              # Cài đặt silent mode
-              Write-Host "│ 🔧 Đang cài đặt UltraViewer..." -ForegroundColor Blue
-              Start-Process -FilePath $uvPath -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -Wait -NoNewWindow
-              
-              # Chờ cài đặt hoàn tất
-              Start-Sleep -Seconds 10
-              
-              # Kiểm tra cài đặt
-              $uvExe = "C:\Program Files (x86)\UltraViewer\UltraViewer_Desktop.exe"
-              if (Test-Path $uvExe) {
-                  Write-Host "│ ✅ UltraViewer đã cài đặt thành công" -ForegroundColor Green
-                  
-                  # Khởi động UltraViewer
-                  Write-Host "│ 🚀 Đang khởi động UltraViewer..." -ForegroundColor Blue
-                  Start-Process -FilePath $uvExe -ErrorAction SilentlyContinue
-                  Start-Sleep -Seconds 8
-                  
-                  # Lấy ID và Password từ registry hoặc file config
+              # Thử từng nguồn với 2 phương thức khác nhau
+              foreach ($source in $downloadSources) {
                   try {
-                      # Đọc ID từ registry
-                      $uvId = (Get-ItemProperty -Path "HKLM:\SOFTWARE\UltraViewer" -Name "ID" -ErrorAction SilentlyContinue).ID
-                      if (-not $uvId) {
-                          $uvId = (Get-ItemProperty -Path "HKCU:\SOFTWARE\UltraViewer" -Name "ID" -ErrorAction SilentlyContinue).ID
-                      }
+                      Write-Host "│ 📥 Đang thử: $($source.Name)..." -ForegroundColor Blue
                       
-                      # Đọc Password từ registry
-                      $uvPass = (Get-ItemProperty -Path "HKLM:\SOFTWARE\UltraViewer" -Name "Password" -ErrorAction SilentlyContinue).Password
-                      if (-not $uvPass) {
-                          $uvPass = (Get-ItemProperty -Path "HKCU:\SOFTWARE\UltraViewer" -Name "Password" -ErrorAction SilentlyContinue).Password
-                      }
-                      
-                      if ($uvId) {
-                          Write-Host "│ 🔑 UltraViewer ID: $uvId" -ForegroundColor Green
-                          echo "UV_ID=$uvId" >> $env:GITHUB_ENV
+                      if ($source.Method -eq "WebClient") {
+                          # Phương thức 1: WebClient (thường ổn định hơn)
+                          $webClient = New-Object System.Net.WebClient
+                          $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                          $webClient.Headers.Add("Accept", "*/*")
+                          $webClient.Proxy = [System.Net.WebRequest]::DefaultWebProxy
+                          $webClient.Proxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+                          
+                          # Tải với timeout
+                          $downloadTask = $webClient.DownloadFileTaskAsync($source.Url, $uvPath)
+                          $timeout = New-TimeSpan -Seconds 60
+                          $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+                          
+                          while (-not $downloadTask.IsCompleted) {
+                              if ($stopwatch.Elapsed -gt $timeout) {
+                                  $webClient.CancelAsync()
+                                  throw "Timeout"
+                              }
+                              Start-Sleep -Milliseconds 500
+                          }
+                          
+                          if ($downloadTask.IsFaulted) {
+                              throw $downloadTask.Exception
+                          }
+                          
                       } else {
-                          Write-Host "│ ⚠️  Chưa lấy được ID (cần vài giây khởi động)" -ForegroundColor Yellow
-                          echo "UV_ID=Đang khởi động..." >> $env:GITHUB_ENV
+                          # Phương thức 2: Invoke-WebRequest
+                          $ProgressPreference = 'SilentlyContinue'
+                          Invoke-WebRequest -Uri $source.Url -OutFile $uvPath `
+                              -UseBasicParsing -TimeoutSec 60 `
+                              -Headers @{
+                                  "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                              }
                       }
                       
-                      if ($uvPass) {
-                          Write-Host "│ 🔐 UltraViewer Password: $uvPass" -ForegroundColor Green
-                          echo "UV_PASS=$uvPass" >> $env:GITHUB_ENV
+                      # Kiểm tra file
+                      if ((Test-Path $uvPath) -and ((Get-Item $uvPath).Length -gt 5MB)) {
+                          $fileSize = [math]::Round((Get-Item $uvPath).Length / 1MB, 2)
+                          Write-Host "│ ✅ Tải thành công! ($fileSize MB)" -ForegroundColor Green
+                          $downloaded = $true
+                          break
                       } else {
-                          Write-Host "│ ⚠️  Chưa lấy được Password (cần vài giây khởi động)" -ForegroundColor Yellow
-                          echo "UV_PASS=Đang khởi động..." >> $env:GITHUB_ENV
+                          Write-Host "│ ⚠️  File không hợp lệ" -ForegroundColor Yellow
+                          Remove-Item $uvPath -Force -ErrorAction SilentlyContinue
                       }
                       
                   } catch {
-                      Write-Host "│ ⚠️  Lỗi đọc thông tin: $($_.Exception.Message)" -ForegroundColor Yellow
-                      echo "UV_ID=Kiểm tra trong ứng dụng" >> $env:GITHUB_ENV
-                      echo "UV_PASS=Kiểm tra trong ứng dụng" >> $env:GITHUB_ENV
+                      Write-Host "│ ⚠️  Lỗi: $($_.Exception.Message -replace "`n"," ")" -ForegroundColor Yellow
+                      Remove-Item $uvPath -Force -ErrorAction SilentlyContinue
+                      Start-Sleep -Seconds 2
                   }
-                  
-              } else {
-                  Write-Host "│ ❌ Không tìm thấy UltraViewer sau khi cài" -ForegroundColor Red
-                  echo "UV_ID=Cài đặt thất bại" >> $env:GITHUB_ENV
-                  echo "UV_PASS=N/A" >> $env:GITHUB_ENV
               }
               
-              # Dọn dẹp file cài đặt
-              Remove-Item $uvPath -Force -ErrorAction SilentlyContinue
-              
-          } catch {
-              Write-Host "│ ❌ Lỗi cài đặt UltraViewer: $($_.Exception.Message)" -ForegroundColor Red
-              echo "UV_ID=Lỗi cài đặt" >> $env:GITHUB_ENV
-              echo "UV_PASS=N/A" >> $env:GITHUB_ENV
-          }
-
-      # TAILSCALE PREMIUM
-      - name: 🌐 THIẾT LẬP MẠNG PREMIUM
-        env:
-          TAILSCALE_AUTH_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
-        run: |
-          Write-Host ""
-          Write-Host "🌐 ĐANG THIẾT LẬP KẾT NỐI MẠNG" -ForegroundColor Yellow
-          
-          try {
-              $msiPath = "$env:TEMP\tailscale-premium.msi"
-              Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-latest-amd64.msi" -OutFile $msiPath
-              Start-Process msiexec.exe -ArgumentList "/i", "`"$msiPath`"", "/quiet", "/norestart" -Wait
-              Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
-              Write-Host "│ ✅ Cài đặt Tailscale thành công" -ForegroundColor Green
-          } catch {
-              Write-Host "│ ❌ Lỗi cài đặt Tailscale" -ForegroundColor Red
-          }
-          
-          Start-Sleep -Seconds 10
-          
-          try {
-              & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTH_KEY --hostname=ai-stv-premium-$env:GITHUB_RUN_ID --accept-routes --accept-dns --reset
-              Write-Host "│ ✅ Kết nối Tailscale thành công" -ForegroundColor Green
-          } catch {
-              Write-Host "│ ❌ Lỗi kết nối Tailscale" -ForegroundColor Red
-          }
-          
-          Write-Host "🔄 Đang lấy địa chỉ IP..." -NoNewline -ForegroundColor Blue
-          $ip = $null
-          for($i=0; $i -lt 20; $i++) {
-              try {
-                  $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4 2>&1
-                  if ($ip -and $ip -match '^\d+\.\d+\.\d+\.\d+$') {
-                      echo "TAILSCALE_IP=$ip" >> $env:GITHUB_ENV
-                      Write-Host "`r✅ Địa chỉ IP: $ip" -ForegroundColor Green
-                      break
-                  }
-              } catch {}
-              Write-Host "`r🔄 Đang lấy địa chỉ IP... $(@('.', '..', '...')[$i % 3])" -NoNewline -ForegroundColor Blue
-              Start-Sleep -Seconds 3
-          }
-          
-          if (-not $ip -or $ip -notmatch '^\d+\.\d+\.\d+\.\d+$') {
-              Write-Host "`r⚠️  Không thể lấy IP, sử dụng localhost" -ForegroundColor Yellow
-              echo "TAILSCALE_IP=localhost" >> $env:GITHUB_ENV
-          }
-
-      # LẤY THÔNG TIN ULTRAVIEWER SAU KHI KHỞI ĐỘNG
-      - name: 🔍 LẤY THÔNG TIN ULTRAVIEWER
-        run: |
-          Write-Host ""
-          Write-Host "🔍 ĐANG LẤY THÔNG TIN ULTRAVIEWER" -ForegroundColor Yellow
-          
-          # Chờ UltraViewer khởi động hoàn toàn
-          Start-Sleep -Seconds 15
-          
-          try {
-              # Thử nhiều nguồn để lấy ID và Password
-              $uvId = $null
-              $uvPass = $null
-              
-              # Nguồn 1: Registry HKLM
-              try {
-                  $uvId = (Get-ItemProperty -Path "HKLM:\SOFTWARE\UltraViewer" -Name "ID" -ErrorAction SilentlyContinue).ID
-                  $uvPass = (Get-ItemProperty -Path "HKLM:\SOFTWARE\UltraViewer" -Name "Password" -ErrorAction SilentlyContinue).Password
-              } catch {}
-              
-              # Nguồn 2: Registry HKCU
-              if (-not $uvId) {
+              # Nếu vẫn không tải được, thử phương án cuối cùng
+              if (-not $downloaded) {
+                  Write-Host "│ 🔄 Thử phương án cuối cùng với curl..." -ForegroundColor Yellow
                   try {
-                      $uvId = (Get-ItemProperty -Path "HKCU:\SOFTWARE\UltraViewer" -Name "ID" -ErrorAction SilentlyContinue).ID
-                      $uvPass = (Get-ItemProperty -Path "HKCU:\SOFTWARE\UltraViewer" -Name "Password" -ErrorAction SilentlyContinue).Password
+                      $curlPath = "C:\Windows\System32\curl.exe"
+                      if (Test-Path $curlPath) {
+                          & $curlPath -L -A "Mozilla/5.0" --max-time 60 `
+                              -o $uvPath "https://www.ultraviewer.net/en/UltraViewer_setup_6.6_en.exe"
+                          
+                          if ((Test-Path $uvPath) -and ((Get-Item $uvPath).Length -gt 5MB)) {
+                              Write-Host "│ ✅ Tải thành công với curl!" -ForegroundColor Green
+                              $downloaded = $true
+                          }
+                      }
                   } catch {}
               }
               
-              # Nguồn 3: File config
-              if (-not $uvId) {
-                  $configPath = "C:\Program Files (x86)\UltraViewer\UltraViewer.ini"
-                  if (Test-Path $configPath) {
-                      $config = Get-Content $configPath -ErrorAction SilentlyContinue
-                      $uvId = ($config | Select-String -Pattern "ID=(.+)" | ForEach-Object { $_.Matches.Groups[1].Value }) -join ""
-                      $uvPass = ($config | Select-String -Pattern "Password=(.+)" | ForEach-Object { $_.Matches.Groups[1].Value }) -join ""
+              if (-not $downloaded) {
+                  throw "KHÔNG THỂ TẢI ULTRAVIEWER - Vui lòng sử dụng RDP"
+              }
+              
+              # Cài đặt
+              Write-Host "│ 🔧 Đang cài đặt UltraViewer..." -ForegroundColor Blue
+              $installArgs = @(
+                  "/VERYSILENT",
+                  "/SUPPRESSMSGBOXES", 
+                  "/NORESTART",
+                  "/SP-",
+                  "/NOICONS"
+              )
+              
+              $process = Start-Process -FilePath $uvPath `
+                  -ArgumentList $installArgs `
+                  -Wait -PassThru -NoNewWindow
+              
+              Write-Host "│ ⏳ Chờ cài đặt hoàn tất..." -ForegroundColor Blue
+              Start-Sleep -Seconds 20
+              
+              # Tìm UltraViewer
+              $uvExe = $null
+              $searchPaths = @(
+                  "C:\Program Files (x86)\UltraViewer\UltraViewer_Desktop.exe",
+                  "C:\Program Files\UltraViewer\UltraViewer_Desktop.exe"
+              )
+              
+              # Tìm trong cả ổ C:\ nếu không tìm thấy
+              foreach ($path in $searchPaths) {
+                  if (Test-Path $path) {
+                      $uvExe = $path
+                      break
                   }
               }
               
-              if ($uvId) {
-                  Write-Host "│ ✅ UltraViewer ID: $uvId" -ForegroundColor Green
-                  echo "UV_ID=$uvId" >> $env:GITHUB_ENV
-              } else {
-                  Write-Host "│ ⚠️  Không lấy được ID - Vui lòng kiểm tra trong ứng dụng" -ForegroundColor Yellow
-                  echo "UV_ID=Xem trong ứng dụng UltraViewer" >> $env:GITHUB_ENV
+              if (-not $uvExe) {
+                  Write-Host "│ 🔍 Tìm kiếm UltraViewer trong hệ thống..." -ForegroundColor Blue
+                  $found = Get-ChildItem -Path "C:\Program Files*" -Filter "UltraViewer_Desktop.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+                  if ($found) {
+                      $uvExe = $found.FullName
+                  }
               }
               
-              if ($uvPass) {
-                  Write-Host "│ ✅ UltraViewer Password: $uvPass" -ForegroundColor Green
-                  echo "UV_PASS=$uvPass" >> $env:GITHUB_ENV
-              } else {
-                  Write-Host "│ ⚠️  Không lấy được Password - Vui lòng kiểm tra trong ứng dụng" -ForegroundColor Yellow
-                  echo "UV_PASS=Xem trong ứng dụng UltraViewer" >> $env:GITHUB_ENV
-              }
-              
-          } catch {
-              Write-Host "│ ❌ Lỗi: $($_.Exception.Message)" -ForegroundColor Red
-              echo "UV_ID=Lỗi - Kiểm tra ứng dụng" >> $env:GITHUB_ENV
-              echo "UV_PASS=N/A" >> $env:GITHUB_ENV
-          }
-
-      # HIỂN THỊ THÔNG TIN ĐẦY ĐỦ
-      - name: 🎉 THÔNG TIN KẾT NỐI
-        run: |
-          $matKhau = Get-Content $env:TEMP\rdp_password.txt -ErrorAction SilentlyContinue
-          if (-not $matKhau) {
-              $matKhau = "Không thể đọc mật khẩu"
-          }
-          
-          $durationInput = "${{ github.event.inputs.duration }}"
-          switch ($durationInput) {
-              "1h" { $totalMinutes = 60; $displayTime = "1 giờ" }
-              "3h" { $totalMinutes = 180; $displayTime = "3 giờ" }
-              "5h40m" { $totalMinutes = 340; $displayTime = "5 giờ 40 phút" }
-          }
-          
-          $timeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById("SE Asia Standard Time")
-          $thoiGianBatDau = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
-          $thoiGianKetThuc = $thoiGianBatDau.AddMinutes($totalMinutes)
-          
-          Write-Host ""
-          Write-Host "╔═══════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-          Write-Host "║          🎉 KẾT NỐI THÀNH CÔNG! 🎉                    ║" -ForegroundColor Cyan
-          Write-Host "╠═══════════════════════════════════════════════════════╣" -ForegroundColor Cyan
-          Write-Host "║                                                       ║" -ForegroundColor Cyan
-          Write-Host "║  📺 ULTRAVIEWER (KHUYÊN DÙNG - DỄ NHẤT!)            ║" -ForegroundColor Yellow
-          Write-Host "║  ┌─────────────────────────────────────────────────┐ ║" -ForegroundColor White
-          Write-Host "║  │ 🔑 ID: $env:UV_ID                                │ ║" -ForegroundColor White
-          Write-Host "║  │ 🔐 Pass: $env:UV_PASS                            │ ║" -ForegroundColor White
-          Write-Host "║  │ 📥 Tải về: https://ultraviewer.net              │ ║" -ForegroundColor White
-          Write-Host "║  │ 💡 Cách dùng: Mở UltraViewer → Nhập ID & Pass   │ ║" -ForegroundColor Green
-          Write-Host "║  └─────────────────────────────────────────────────┘ ║" -ForegroundColor White
-          Write-Host "║                                                       ║" -ForegroundColor Cyan
-          Write-Host "║  🖥️  REMOTE DESKTOP (Phương án dự phòng)            ║" -ForegroundColor Yellow
-          Write-Host "║  ┌─────────────────────────────────────────────────┐ ║" -ForegroundColor White
-          Write-Host "║  │ 🌐 IP: $env:TAILSCALE_IP                        │ ║" -ForegroundColor White
-          Write-Host "║  │ 👤 User: AISTV-PREMIUM                          │ ║" -ForegroundColor White
-          Write-Host "║  │ 🔐 Pass: $matKhau                               │ ║" -ForegroundColor White
-          Write-Host "║  │ 📍 Port: 3389                                   │ ║" -ForegroundColor White
-          Write-Host "║  └─────────────────────────────────────────────────┘ ║" -ForegroundColor White
-          Write-Host "║                                                       ║" -ForegroundColor Cyan
-          Write-Host "║  ⏰ THỜI GIAN                                        ║" -ForegroundColor Yellow
-          Write-Host "║  ┌─────────────────────────────────────────────────┐ ║" -ForegroundColor White
-          Write-Host "║  │ 🕐 Bắt đầu: $($thoiGianBatDau.ToString('HH:mm:ss'))                         │ ║" -ForegroundColor White
-          Write-Host "║  │ 🕐 Kết thúc: $($thoiGianKetThuc.ToString('HH:mm:ss'))                       │ ║" -ForegroundColor White
-          Write-Host "║  │ ⏱️  Thời lượng: $displayTime                     │ ║" -ForegroundColor White
-          Write-Host "║  └─────────────────────────────────────────────────┘ ║" -ForegroundColor White
-          Write-Host "║                                                       ║" -ForegroundColor Cyan
-          Write-Host "╚═══════════════════════════════════════════════════════╝" -ForegroundColor Cyan
-          Write-Host ""
-          Write-Host "🚀 Enjoy your Premium Server! 🚀" -ForegroundColor Green
-          
-          echo "TOTAL_MINUTES=$totalMinutes" >> $env:GITHUB_ENV
-
-      # DUY TRÌ PHIÊN
-      - name: ⏳ DUY TRÌ PHIÊN LÀM VIỆC
-        run: |
-          $totalMinutes = $env:TOTAL_MINUTES
-          $timeZone = [System.TimeZoneInfo]::FindSystemTimeZoneById("SE Asia Standard Time")
-          $thoiGianBatDau = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
-          $thoiGianKetThuc = $thoiGianBatDau.AddMinutes($totalMinutes)
-          
-          Write-Host ""
-          Write-Host "🔄 BẮT ĐẦU DUY TRÌ PHIÊN LÀM VIỆC..." -ForegroundColor Yellow
-          Write-Host "💎 Phiên: AI STV PREMIUM + ULTRAVIEWER" -ForegroundColor Magenta
-          Write-Host "🔗 Kết nối: $env:TAILSCALE_IP" -ForegroundColor Cyan
-          Write-Host "📺 UltraViewer ID: $env:UV_ID" -ForegroundColor Cyan
-          Write-Host "🕐 Bắt đầu: $($thoiGianBatDau.ToString('HH:mm:ss'))" -ForegroundColor Green
-          Write-Host "🕐 Kết thúc: $($thoiGianKetThuc.ToString('HH:mm:ss'))" -ForegroundColor Green
-          Write-Host ""
-          
-          # Monitor script
-          $monitorScript = {
-              $lastLogTime = Get-Date
-              while ($true) {
-                  $currentTime = Get-Date
+              if ($uvExe) {
+                  Write-Host "│ ✅ Tìm thấy UltraViewer: $uvExe" -ForegroundColor Green
                   
-                  if (($currentTime - $lastLogTime).TotalMinutes -ge 2) {
-                      $termService = Get-Service -Name TermService -ErrorAction SilentlyContinue
-                      $rdpConnections = Get-NetTCPConnection -LocalPort 3389 -ErrorAction SilentlyContinue | Where-Object {$_.State -eq 'Established'}
-                      
-                      # Kiểm tra UltraViewer
-                      $uvProcess = Get-Process -Name "UltraViewer_Desktop" -ErrorAction SilentlyContinue
-                      $uvStatus = if ($uvProcess) { "Running" } else { "Stopped" }
-                      
-                      Write-Host "[$($currentTime.ToString('HH:mm:ss'))] 📊 RDP: $($termService.Status) | UV: $uvStatus | Kết nối: $($rdpConnections.Count)" -ForegroundColor Blue
-                      $lastLogTime = $currentTime
-                      
-                      # Khởi động lại UltraViewer nếu bị tắt
-                      if (-not $uvProcess) {
+                  # Khởi động
+                  Write-Host "│ 🚀 Đang khởi động..." -ForegroundColor Blue
+                  Start-Process -FilePath $uvExe -ErrorAction SilentlyContinue
+                  Start-Sleep -Seconds 15
+                  
+                  # Lấy thông tin
+                  Write-Host "│ 🔍 Đang lấy ID & Password..." -ForegroundColor Blue
+                  
+                  $uvId = $null
+                  $uvPass = $null
+                  
+                  # Thử lấy từ registry
+                  $regPaths = @(
+                      "HKLM:\SOFTWARE\UltraViewer",
+                      "HKLM:\SOFTWARE\WOW6432Node\UltraViewer",
+                      "HKCU:\SOFTWARE\UltraViewer"
+                  )
+                  
+                  for ($i = 0; $i -lt 20; $i++) {
+                      foreach ($regPath in $regPaths) {
                           try {
-                              Start-Process -FilePath "C:\Program Files (x86)\UltraViewer\UltraViewer_Desktop.exe" -ErrorAction SilentlyContinue
-                              Write-Host "[$($currentTime.ToString('HH:mm:ss'))] 🔄 Đã khởi động lại UltraViewer" -ForegroundColor Yellow
+                              if (Test-Path $regPath) {
+                                  $uvId = (Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue).ID
+                                  $uvPass = (Get-ItemProperty -Path $regPath -ErrorAction SilentlyContinue).Password
+                                  
+                                  if ($uvId) { 
+                                      Write-Host "│ ✅ ID: $uvId" -ForegroundColor Green
+                                      break 
+                                  }
+                              }
                           } catch {}
                       }
+                      
+                      if ($uvId) { break }
+                      
+                      Write-Host "│ 🔄 Đợi UltraViewer khởi tạo... ($($i+1)/20)" -ForegroundColor Yellow
+                      Start-Sleep -Seconds 3
                   }
                   
-                  $termService = Get-Service -Name TermService -ErrorAction SilentlyContinue
-                  if ($termService.Status -ne 'Running') {
-                      Write-Host "[$($currentTime.ToString('HH:mm:ss'))] 🔄 Khởi động lại TermService..." -ForegroundColor Yellow
-                      Start-Service -Name TermService -ErrorAction SilentlyContinue
+                  if ($uvId) {
+                      echo "UV_ID=$uvId" >> $env:GITHUB_ENV
+                  } else {
+                      Write-Host "│ ⚠️  Không lấy được ID tự động - Xem trong app" -ForegroundColor Yellow
+                      echo "UV_ID=Mở app để xem" >> $env:GITHUB_ENV
                   }
                   
-                  Start-Sleep -Seconds 30
+                  if ($uvPass) {
+                      Write-Host "│ ✅ Password: $uvPass" -ForegroundColor Green
+                      echo "UV_PASS=$uvPass" >> $env:GITHUB_ENV
+                  } else {
+                      echo "UV_PASS=Xem trong app" >> $env:GITHUB_ENV
+                  }
+                  
+              } else {
+                  throw "Không tìm thấy UltraViewer sau khi cài"
               }
+              
+              # Cleanup
+              Remove-Item $uvPath -Force -ErrorAction SilentlyContinue
+              
+          } catch {
+              Write-Host ""
+              Write-Host "│ ❌ LỖI: $($_.Exception.Message)" -ForegroundColor Red
+              Write-Host "│" -ForegroundColor Gray
+              Write-Host "│ 💡 KHÔNG SAO! Bạn vẫn có RDP để sử dụng" -ForegroundColor Cyan
+              Write-Host "│ 📌 Sau khi kết nối RDP, bạn có thể:" -ForegroundColor Blue
+              Write-Host "│    1. Mở trình duyệt" -ForegroundColor White
+              Write-Host "│    2. Tải UltraViewer từ: ultraviewer.net" -ForegroundColor White
+              Write-Host "│    3. Cài đặt và sử dụng" -ForegroundColor White
+              Write-Host ""
+              
+              echo "UV_ID=Cài bằng tay qua RDP" >> $env:GITHUB_ENV
+              echo "UV_PASS=ultraviewer.net" >> $env:GITHUB_ENV
           }
-          
-          Start-Job -ScriptBlock $monitorScript -Name "SystemMonitor"
-          
-          # Timer
-          $frames = @('⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏')
-          $colors = @('Red', 'Yellow', 'Green', 'Cyan', 'Blue', 'Magenta')
-          $startTime = Get-Date
-          
-          do {
-              $thoiGianHienTai = [System.TimeZoneInfo]::ConvertTimeFromUtc((Get-Date).ToUniversalTime(), $timeZone)
-              $thoiGianConLai = $thoiGianKetThuc - $thoiGianHienTai
-              
-              $gioConLai = [math]::Max(0, [math]::Floor($thoiGianConLai.TotalHours))
-              $phutConLai = [math]::Max(0, [math]::Floor($thoiGianConLai.TotalMinutes % 60))
-              $giayConLai = [math]::Max(0, [math]::Floor($thoiGianConLai.TotalSeconds % 60))
-              
-              $frame = $frames[([int]((Get-Date) - $startTime).TotalSeconds) % $frames.Length]
-              $color = $colors[([int]((Get-Date) - $startTime).TotalMinutes) % $colors.Length]
-              
-              Write-Host "`r$frame [$($thoiGianHienTai.ToString('HH:mm:ss'))] Thời gian còn lại: $gioConLai giờ $phutConLai phút $giayConLai giây" -NoNewline -ForegroundColor $color
-              
-              Start-Sleep -Seconds 5
-              
-          } while ($thoiGianConLai.TotalSeconds -gt 0)
-          
-          Write-Host ""
-          Write-Host "🎯 ĐÃ HẾT THỜI GIAN - TỰ ĐỘNG DỪNG!" -ForegroundColor Red
-          
-          Get-Job -Name "SystemMonitor" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force
-
-      # DỌN DẸP CHUYÊN NGHIỆP
-      - name: 🧹 DỌN DẸP HỆ THỐNG
-        if: always()
-        run: |
-          Write-Host ""
-          Write-Host "🧹 ĐANG DỌN DẸP HỆ THỐNG..." -ForegroundColor Yellow
-          
-          $cleanupSteps = @(
-              @{Name="Đóng UltraViewer"; Script={
-                  Stop-Process -Name "UltraViewer_Desktop" -Force -ErrorAction SilentlyContinue
-                  Stop-Process -Name "UltraViewer_Service" -Force -ErrorAction SilentlyContinue
-              }},
-              @{Name="Xóa file password"; Script={
-                  Remove-Item "$env:TEMP\rdp_password.txt" -ErrorAction SilentlyContinue
-              }},
-              @{Name="Vô hiệu hóa user"; Script={
-                  Disable-LocalUser -Name "AISTV-PREMIUM" -ErrorAction SilentlyContinue
-              }},
-              @{Name="Đóng kết nối mạng"; Script={
-                  & "$env:ProgramFiles\Tailscale\tailscale.exe" down --accept-risk=all -ErrorAction SilentlyContinue
-                  Start-Sleep -Seconds 5
-              }},
-              @{Name="Xóa rule firewall"; Script={
-                  netsh advfirewall firewall delete rule name="RDP-Premium" dir=in -ErrorAction SilentlyContinue
-                  netsh advfirewall firewall delete rule name="RDP-Premium-Out" dir=out -ErrorAction SilentlyContinue
-                  Remove-NetFirewallRule -DisplayName "RDP-Premium" -ErrorAction SilentlyContinue
-                  Remove-NetFirewallRule -DisplayName "RDP-Premium-Out" -ErrorAction SilentlyContinue
-              }},
-              @{Name="Khôi phục cài đặt RDP"; Script={
-                  Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 1 -Force -ErrorAction SilentlyContinue
-                  Stop-Service -Name TermService -Force -ErrorAction SilentlyContinue
-              }}
-          )
-          
-          foreach($step in $cleanupSteps) {
-              Write-Host "│ 🗑️  $($step.Name)..." -NoNewline -ForegroundColor Gray
-              try {
-                  & $step.Script
-                  Write-Host "`r│ ✅ $($step.Name)" -ForegroundColor Green
-              } catch {
-                  Write-Host "`r│ ⚠️  $($step.Name) - Đã xử lý an toàn" -ForegroundColor Yellow
-              }
-              Start-Sleep -Milliseconds 300
-          }
-          
-          Get-Job | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
-          
-          Write-Host ""
-          Write-Host "🎉 Dọn dẹp hoàn tất! Hẹn gặp lại! 👋" -ForegroundColor Green
